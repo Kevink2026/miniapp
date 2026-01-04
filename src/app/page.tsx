@@ -16,6 +16,8 @@ export default function Home() {
   const [walletStats, setWalletStats] = useState<WalletStats | null>(null);
   const [error, setError] = useState<string>('');
   const [hasChecked, setHasChecked] = useState(false);
+  const [manualAddress, setManualAddress] = useState<string>('');
+  const [isManualMode, setIsManualMode] = useState(false);
 
   const handleCheck = useCallback(async (walletAddress: Address) => {
     setAppState('loading');
@@ -50,16 +52,37 @@ export default function Home() {
     setHasChecked(false);
     setWalletStats(null);
     setError('');
-    if (address) {
+    setManualAddress('');
+    setIsManualMode(false);
+    if (address && !isManualMode) {
       handleCheck(address);
     }
-  }, [address, handleCheck]);
+  }, [address, handleCheck, isManualMode]);
 
   const handleConnect = () => {
     const connector = connectors[0];
     if (connector) {
       connect({ connector });
     }
+  };
+
+  const handleManualCheck = () => {
+    // Validate address format (Ethereum addresses are 42 chars: 0x + 40 hex chars)
+    const trimmedAddress = manualAddress.trim();
+    if (!trimmedAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+      setError('Invalid address format. Please enter a valid Ethereum address.');
+      setAppState('error');
+      return;
+    }
+    setIsManualMode(true);
+    handleCheck(trimmedAddress as Address);
+  };
+
+  const switchToManualMode = () => {
+    setIsManualMode(true);
+    setAppState('connecting');
+    setWalletStats(null);
+    setError('');
   };
 
   return (
@@ -78,8 +101,8 @@ export default function Home() {
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
 
-          {/* Not connected - show connect button */}
-          {!isConnected && !isConnecting && (
+          {/* Not connected - show connect button and manual lookup */}
+          {!isConnected && !isConnecting && !isManualMode && (
             <div className="text-center space-y-6">
               <div className="w-20 h-20 mx-auto bg-base-blue/20 rounded-full flex items-center justify-center text-4xl">
                 🔵
@@ -95,6 +118,58 @@ export default function Home() {
                 className="w-full py-4 px-6 bg-base-blue hover:bg-blue-600 text-white font-semibold rounded-xl transition-all duration-200 glow"
               >
                 Connect Wallet
+              </button>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-700"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-base-dark text-gray-500">or</span>
+                </div>
+              </div>
+              <button
+                onClick={switchToManualMode}
+                className="w-full py-3 px-6 border border-gray-700 hover:border-gray-600 text-gray-300 hover:text-white font-medium rounded-xl transition-colors"
+              >
+                Check Any Address
+              </button>
+            </div>
+          )}
+
+          {/* Manual address lookup */}
+          {!isConnected && !isConnecting && isManualMode && appState !== 'loading' && appState !== 'results' && appState !== 'no-transactions' && (
+            <div className="text-center space-y-6">
+              <div className="w-20 h-20 mx-auto bg-base-blue/20 rounded-full flex items-center justify-center text-4xl">
+                🔍
+              </div>
+              <div>
+                <p className="text-lg font-medium text-white">Check any address</p>
+                <p className="text-gray-400 text-sm mt-1">
+                  Enter a wallet address to check
+                </p>
+              </div>
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={manualAddress}
+                  onChange={(e) => setManualAddress(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleManualCheck()}
+                  placeholder="0x..."
+                  className="w-full py-3 px-4 bg-base-gray border border-gray-700 focus:border-base-blue text-white font-mono rounded-xl outline-none transition-colors"
+                />
+                <button
+                  onClick={handleManualCheck}
+                  disabled={!manualAddress.trim()}
+                  className="w-full py-4 px-6 bg-base-blue hover:bg-blue-600 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl transition-all duration-200 glow disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Check Address
+                </button>
+              </div>
+              <button
+                onClick={() => setIsManualMode(false)}
+                className="text-gray-400 hover:text-white text-sm transition-colors"
+              >
+                Back to connect
               </button>
             </div>
           )}
@@ -113,7 +188,7 @@ export default function Home() {
           )}
 
           {/* Loading wallet data */}
-          {isConnected && appState === 'loading' && (
+          {appState === 'loading' && (
             <div className="text-center space-y-4">
               <div className="w-16 h-16 mx-auto bg-base-blue rounded-full flex items-center justify-center">
                 <svg className="animate-spin h-8 w-8 text-white" viewBox="0 0 24 24">
@@ -124,9 +199,12 @@ export default function Home() {
               <div>
                 <p className="text-lg font-medium text-white">Checking wallet...</p>
                 <p className="text-gray-400 text-sm">Scanning Base history</p>
-                {address && (
+                {(address || manualAddress) && (
                   <p className="text-gray-500 text-xs mt-2 font-mono">
-                    {address.slice(0, 6)}...{address.slice(-4)}
+                    {isManualMode
+                      ? `${manualAddress.slice(0, 6)}...${manualAddress.slice(-4)}`
+                      : address && `${address.slice(0, 6)}...${address.slice(-4)}`
+                    }
                   </p>
                 )}
               </div>
@@ -134,7 +212,7 @@ export default function Home() {
           )}
 
           {/* Results */}
-          {isConnected && appState === 'results' && walletStats && (
+          {appState === 'results' && walletStats && (
             <ResultsDisplay
               stats={walletStats}
               onReset={handleReset}
@@ -142,7 +220,7 @@ export default function Home() {
           )}
 
           {/* No transactions */}
-          {isConnected && appState === 'no-transactions' && (
+          {appState === 'no-transactions' && (
             <div className="text-center space-y-4">
               <div className="w-16 h-16 mx-auto bg-gray-700 rounded-full flex items-center justify-center text-3xl">
                 🤷
@@ -152,9 +230,12 @@ export default function Home() {
                 <p className="text-gray-400 text-sm">
                   This wallet hasn't transacted on Base yet.
                 </p>
-                {address && (
+                {(address || manualAddress) && (
                   <p className="text-gray-500 text-xs mt-2 font-mono">
-                    {address.slice(0, 6)}...{address.slice(-4)}
+                    {isManualMode
+                      ? `${manualAddress.slice(0, 6)}...${manualAddress.slice(-4)}`
+                      : address && `${address.slice(0, 6)}...${address.slice(-4)}`
+                    }
                   </p>
                 )}
               </div>
@@ -162,13 +243,13 @@ export default function Home() {
                 onClick={handleReset}
                 className="py-3 px-6 bg-base-blue hover:bg-blue-600 text-white font-medium rounded-xl transition-colors"
               >
-                Try Again
+                {isManualMode ? 'Check Another Address' : 'Try Again'}
               </button>
             </div>
           )}
 
           {/* Error */}
-          {isConnected && appState === 'error' && (
+          {appState === 'error' && (
             <div className="text-center space-y-4">
               <div className="w-16 h-16 mx-auto bg-red-500/20 rounded-full flex items-center justify-center text-3xl">
                 ❌
@@ -181,7 +262,7 @@ export default function Home() {
                 onClick={handleReset}
                 className="py-3 px-6 bg-base-blue hover:bg-blue-600 text-white font-medium rounded-xl transition-colors"
               >
-                Try Again
+                {isManualMode ? 'Try Another Address' : 'Try Again'}
               </button>
             </div>
           )}
