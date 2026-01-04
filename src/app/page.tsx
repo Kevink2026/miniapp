@@ -124,6 +124,11 @@ export default function Home() {
               <div>
                 <p className="text-lg font-medium text-white">Checking wallet...</p>
                 <p className="text-gray-400 text-sm">Scanning Base history</p>
+                {address && (
+                  <p className="text-gray-500 text-xs mt-2 font-mono">
+                    {address.slice(0, 6)}...{address.slice(-4)}
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -147,6 +152,11 @@ export default function Home() {
                 <p className="text-gray-400 text-sm">
                   This wallet hasn't transacted on Base yet.
                 </p>
+                {address && (
+                  <p className="text-gray-500 text-xs mt-2 font-mono">
+                    {address.slice(0, 6)}...{address.slice(-4)}
+                  </p>
+                )}
               </div>
               <button
                 onClick={handleReset}
