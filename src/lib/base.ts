@@ -31,7 +31,7 @@ export async function getFirstTransaction(address: Address): Promise<{
       return {
         hash: data.hash,
         blockNumber: data.blockNumber || 0,
-        txCount: data.txCount,
+        txCount: data.totalTransactions || data.txCount,
       };
     }
 

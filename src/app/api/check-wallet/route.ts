@@ -13,49 +13,83 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Use correct CDP method: cdp_listAddressTransactions
-    // Important: address must be lowercase!
-    const rpcPayload = {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'cdp_listAddressTransactions',
-      params: [
-        {
-          address: address.toLowerCase(),
-          pageSize: 1,
-          pageToken: ''
+    // Get ALL transactions for this address and find the oldest one
+    let allTransactions: any[] = [];
+    let pageToken = '';
+    let pageCount = 0;
+    const maxPages = 50; // Limit to prevent infinite loops
+
+    // Paginate through all transactions
+    do {
+      const rpcPayload = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'cdp_listAddressTransactions',
+        params: [
+          {
+            address: address.toLowerCase(),
+            pageSize: 100, // Get max per page
+            pageToken: pageToken
+          }
+        ]
+      };
+
+      console.log(`Fetching page ${pageCount + 1}...`);
+
+      const response = await fetch(CDP_NODE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${CDP_API_KEY}`,
+        },
+        body: JSON.stringify(rpcPayload),
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        console.error('CDP API Error:', data.error);
+        break;
+      }
+
+      if (data.result && Array.isArray(data.result)) {
+        allTransactions = allTransactions.concat(data.result);
+        // Check if there's a nextPageToken in the response
+        pageToken = data.nextPageToken || '';
+      } else {
+        break;
+      }
+
+      pageCount++;
+    } while (pageToken && pageCount < maxPages);
+
+    console.log(`Total transactions found: ${allTransactions.length}`);
+
+    if (allTransactions.length > 0) {
+      // Find the transaction with the LOWEST blockHeight (oldest transaction)
+      let oldestTx = allTransactions[0];
+      let lowestBlock = parseInt(oldestTx.blockHeight, 10) || Infinity;
+
+      for (const tx of allTransactions) {
+        const blockHeight = parseInt(tx.blockHeight, 10);
+        if (blockHeight && blockHeight < lowestBlock) {
+          lowestBlock = blockHeight;
+          oldestTx = tx;
         }
-      ]
-    };
+      }
 
-    console.log('CDP Node RPC request:', JSON.stringify(rpcPayload));
+      console.log(`Oldest transaction at block ${lowestBlock}:`, oldestTx.hash);
 
-    const response = await fetch(CDP_NODE_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${CDP_API_KEY}`,
-      },
-      body: JSON.stringify(rpcPayload),
-    });
-
-    const data = await response.json();
-    console.log('CDP Node response:', JSON.stringify(data).slice(0, 1000));
-
-    // Check for CDP response format
-    if (data.result && data.result.length > 0) {
-      const tx = data.result[0];
       return NextResponse.json({
         success: true,
-        hash: tx.hash,
-        blockNumber: parseInt(tx.blockHeight, 10),
-        blockHash: tx.blockHash,
-        status: tx.status,
+        hash: oldestTx.hash,
+        blockNumber: lowestBlock,
+        blockHash: oldestTx.blockHash,
+        totalTransactions: allTransactions.length,
       });
     }
 
-    // If no results from cdp_listAddressTransactions, try eth_getTransactionCount
-    // This at least tells us if the address has sent transactions
+    // Fallback: check transaction count (only counts SENT transactions)
     const countPayload = {
       jsonrpc: '2.0',
       id: 2,
@@ -73,19 +107,17 @@ export async function GET(request: NextRequest) {
     });
 
     const countData = await countResponse.json();
-    console.log('Transaction count response:', JSON.stringify(countData));
-
     const txCount = parseInt(countData.result, 16);
 
+    console.log(`Transaction count (sent only): ${txCount}`);
+
     if (txCount > 0) {
-      // Address has sent transactions, but we couldn't get the first one
-      // Return a partial result
       return NextResponse.json({
         success: true,
         hash: 'unknown',
         blockNumber: 0,
-        txCount: txCount,
-        note: 'Wallet has transactions but first tx details unavailable'
+        totalTransactions: txCount,
+        note: 'Has sent transactions but details unavailable'
       });
     }
 
@@ -95,8 +127,8 @@ export async function GET(request: NextRequest) {
       error: 'No transactions found',
       debug: {
         address: address.toLowerCase(),
-        cdpResponse: data,
-        txCount: txCount,
+        pagesChecked: pageCount,
+        transactionsFound: allTransactions.length,
         nodeUrl: CDP_NODE_URL,
         apiKeyPresent: !!CDP_API_KEY,
       }
