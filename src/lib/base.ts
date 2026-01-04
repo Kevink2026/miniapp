@@ -1,9 +1,6 @@
 import { createPublicClient, http, type Address } from 'viem';
 import { base } from 'viem/chains';
 
-const BASESCAN_API_KEY = process.env.NEXT_PUBLIC_BASESCAN_API_KEY || '';
-const BASESCAN_API_URL = 'https://api.basescan.org/api';
-
 export interface WalletStats {
   address: Address;
   firstTxHash: string;
@@ -24,38 +21,22 @@ export async function getFirstTransaction(address: Address): Promise<{
   blockNumber: number;
 } | null> {
   try {
-    const response = await fetch(
-      `${BASESCAN_API_URL}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${BASESCAN_API_KEY}`
-    );
-
+    // Use our API route to avoid CORS issues
+    const response = await fetch(`/api/check-wallet?address=${address}`);
     const data = await response.json();
 
-    if (data.status !== '1' || !data.result || data.result.length === 0) {
-      // Try internal transactions as well
-      const internalResponse = await fetch(
-        `${BASESCAN_API_URL}?module=account&action=txlistinternal&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${BASESCAN_API_KEY}`
-      );
+    console.log('API response:', data);
 
-      const internalData = await internalResponse.json();
-
-      if (internalData.status !== '1' || !internalData.result || internalData.result.length === 0) {
-        return null;
-      }
-
-      const tx = internalData.result[0];
+    if (data.success) {
       return {
-        hash: tx.hash,
-        timestamp: parseInt(tx.timeStamp),
-        blockNumber: parseInt(tx.blockNumber),
+        hash: data.hash,
+        timestamp: data.timestamp,
+        blockNumber: data.blockNumber,
       };
     }
 
-    const tx = data.result[0];
-    return {
-      hash: tx.hash,
-      timestamp: parseInt(tx.timeStamp),
-      blockNumber: parseInt(tx.blockNumber),
-    };
+    console.log('No transactions found:', data.debug);
+    return null;
   } catch (error) {
     console.error('Error fetching first transaction:', error);
     return null;
