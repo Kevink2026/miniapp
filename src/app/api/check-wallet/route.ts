@@ -13,19 +13,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Try CDP Advanced API method
+    // Use correct CDP method: cdp_listAddressTransactions
+    // Important: address must be lowercase!
     const rpcPayload = {
       jsonrpc: '2.0',
       id: 1,
-      method: 'coinbaseCloud_getTransactionsByAddress',
-      params: {
-        address: address,
-        blockStart: '0x1',
-        blockEnd: 'latest',
-        addressFilter: 'SENDER_OR_RECEIVER',
-        sort: 'asc',
-        pageSize: 1,
-      }
+      method: 'cdp_listAddressTransactions',
+      params: [
+        {
+          address: address.toLowerCase(),
+          pageSize: 1,
+          pageToken: ''
+        }
+      ]
     };
 
     console.log('CDP Node RPC request:', JSON.stringify(rpcPayload));
@@ -40,53 +40,52 @@ export async function GET(request: NextRequest) {
     });
 
     const data = await response.json();
-    console.log('CDP Node response:', JSON.stringify(data).slice(0, 500));
+    console.log('CDP Node response:', JSON.stringify(data).slice(0, 1000));
 
-    if (data.result && data.result.transactions && data.result.transactions.length > 0) {
-      const tx = data.result.transactions[0];
+    // Check for CDP response format
+    if (data.result && data.result.length > 0) {
+      const tx = data.result[0];
       return NextResponse.json({
         success: true,
-        hash: tx.transactionHash || tx.hash,
-        timestamp: parseInt(tx.blockTimestamp, 16) || Math.floor(Date.now() / 1000),
-        blockNumber: parseInt(tx.blockNumber, 16),
+        hash: tx.hash,
+        blockNumber: parseInt(tx.blockHeight, 10),
+        blockHash: tx.blockHash,
+        status: tx.status,
       });
     }
 
-    // If advanced method not available, try standard eth_getLogs for transfers
-    const logsPayload = {
+    // If no results from cdp_listAddressTransactions, try eth_getTransactionCount
+    // This at least tells us if the address has sent transactions
+    const countPayload = {
       jsonrpc: '2.0',
       id: 2,
-      method: 'eth_getLogs',
-      params: [{
-        fromBlock: '0x1',
-        toBlock: 'latest',
-        topics: [
-          '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef', // Transfer event
-          null,
-          '0x000000000000000000000000' + address.slice(2).toLowerCase(), // to address
-        ],
-      }]
+      method: 'eth_getTransactionCount',
+      params: [address.toLowerCase(), 'latest']
     };
 
-    const logsResponse = await fetch(CDP_NODE_URL, {
+    const countResponse = await fetch(CDP_NODE_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${CDP_API_KEY}`,
       },
-      body: JSON.stringify(logsPayload),
+      body: JSON.stringify(countPayload),
     });
 
-    const logsData = await logsResponse.json();
-    console.log('CDP Logs response:', JSON.stringify(logsData).slice(0, 500));
+    const countData = await countResponse.json();
+    console.log('Transaction count response:', JSON.stringify(countData));
 
-    if (logsData.result && logsData.result.length > 0) {
-      const log = logsData.result[0];
+    const txCount = parseInt(countData.result, 16);
+
+    if (txCount > 0) {
+      // Address has sent transactions, but we couldn't get the first one
+      // Return a partial result
       return NextResponse.json({
         success: true,
-        hash: log.transactionHash,
-        timestamp: Math.floor(Date.now() / 1000), // We don't have timestamp from logs
-        blockNumber: parseInt(log.blockNumber, 16),
+        hash: 'unknown',
+        blockNumber: 0,
+        txCount: txCount,
+        note: 'Wallet has transactions but first tx details unavailable'
       });
     }
 
@@ -95,9 +94,9 @@ export async function GET(request: NextRequest) {
       success: false,
       error: 'No transactions found',
       debug: {
-        address: address,
+        address: address.toLowerCase(),
         cdpResponse: data,
-        logsResponse: logsData,
+        txCount: txCount,
         nodeUrl: CDP_NODE_URL,
         apiKeyPresent: !!CDP_API_KEY,
       }

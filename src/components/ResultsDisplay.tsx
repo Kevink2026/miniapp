@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { type WalletStats } from '@/lib/base';
-import { getTierByOrder, calculatePercentile, formatWalletOrder, formatPercentile, formatDate } from '@/lib/tiers';
+import { getTierByOrder, calculatePercentile, formatWalletOrder, formatPercentile } from '@/lib/tiers';
 import { TierBadge } from './TierBadge';
 import { getBasescanTxUrl } from '@/lib/base';
 
@@ -57,25 +57,31 @@ Check how early YOU are`;
 
       {/* First Transaction Info */}
       <div className="bg-base-gray rounded-xl p-4 space-y-2 text-sm">
-        <div className="flex justify-between items-center">
-          <span className="text-gray-400">First Transaction</span>
-          <span className="text-white">{formatDate(stats.firstTxTimestamp)}</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-gray-400">Block</span>
-          <span className="text-white font-mono">{stats.firstTxBlockNumber.toLocaleString()}</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-gray-400">Tx</span>
-          <a
-            href={getBasescanTxUrl(stats.firstTxHash)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-base-blue hover:underline font-mono truncate max-w-[180px]"
-          >
-            {stats.firstTxHash.slice(0, 8)}...{stats.firstTxHash.slice(-6)}
-          </a>
-        </div>
+        {stats.firstTxBlockNumber > 0 && (
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">First Block</span>
+            <span className="text-white font-mono">{stats.firstTxBlockNumber.toLocaleString()}</span>
+          </div>
+        )}
+        {stats.txCount && (
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">Total Transactions</span>
+            <span className="text-white font-mono">{stats.txCount.toLocaleString()}</span>
+          </div>
+        )}
+        {stats.firstTxHash && stats.firstTxHash !== 'unknown' && (
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">First Tx</span>
+            <a
+              href={getBasescanTxUrl(stats.firstTxHash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-base-blue hover:underline font-mono truncate max-w-[180px]"
+            >
+              {stats.firstTxHash.slice(0, 8)}...{stats.firstTxHash.slice(-6)}
+            </a>
+          </div>
+        )}
       </div>
 
       {/* Action Buttons */}

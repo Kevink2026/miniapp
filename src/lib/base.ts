@@ -4,10 +4,10 @@ import { base } from 'viem/chains';
 export interface WalletStats {
   address: Address;
   firstTxHash: string;
-  firstTxTimestamp: number;
   firstTxBlockNumber: number;
   walletOrder: number;
   totalWallets: number;
+  txCount?: number;
 }
 
 export const publicClient = createPublicClient({
@@ -17,8 +17,8 @@ export const publicClient = createPublicClient({
 
 export async function getFirstTransaction(address: Address): Promise<{
   hash: string;
-  timestamp: number;
   blockNumber: number;
+  txCount?: number;
 } | null> {
   try {
     // Use our API route to avoid CORS issues
@@ -30,8 +30,8 @@ export async function getFirstTransaction(address: Address): Promise<{
     if (data.success) {
       return {
         hash: data.hash,
-        timestamp: data.timestamp,
-        blockNumber: data.blockNumber,
+        blockNumber: data.blockNumber || 0,
+        txCount: data.txCount,
       };
     }
 
@@ -99,15 +99,17 @@ export async function getWalletStats(address: Address): Promise<WalletStats | nu
     return null;
   }
 
+  // If we have txCount but no blockNumber, we know they have transactions
+  // but we can't determine their exact order
   const { walletOrder, totalWallets } = await estimateWalletOrder(firstTx.blockNumber);
 
   return {
     address,
     firstTxHash: firstTx.hash,
-    firstTxTimestamp: firstTx.timestamp,
     firstTxBlockNumber: firstTx.blockNumber,
     walletOrder,
     totalWallets,
+    txCount: firstTx.txCount,
   };
 }
 
