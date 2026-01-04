@@ -1,28 +1,22 @@
 'use client';
 
-import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { WagmiProvider } from 'wagmi';
-import { config } from '@/lib/wagmi';
-import '@rainbow-me/rainbowkit/styles.css';
-
-const queryClient = new QueryClient();
+import { MiniKitProvider } from '@coinbase/onchainkit/minikit';
+import { base } from 'wagmi/chains';
+import '@coinbase/onchainkit/styles.css';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider
-          theme={darkTheme({
-            accentColor: '#0052FF',
-            accentColorForeground: 'white',
-            borderRadius: 'medium',
-            fontStack: 'system',
-          })}
-        >
-          {children}
-        </RainbowKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
+    <MiniKitProvider
+      apiKey={process.env.NEXT_PUBLIC_ONCHAINKIT_API_KEY}
+      chain={base}
+      config={{
+        appearance: {
+          mode: 'dark',
+          theme: 'base',
+        },
+      }}
+    >
+      {children}
+    </MiniKitProvider>
   );
 }

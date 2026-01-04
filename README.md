@@ -1,32 +1,33 @@
-# How Early on Base? 🔵
+# How Early on Base?
 
-A mini app that shows how early a wallet was on Base, based on the wallet's first transaction. Users can mint a soulbound NFT badge proving their OG status.
+A Base Mini App that shows how early a wallet was on Base, based on the wallet's first transaction.
 
 ## Features
 
-- **Wallet Check**: Connect wallet or enter any address to check
-- **Early Score**: See your wallet order and percentile ranking
-- **Tier System**: Fun meme-based tiers from "Insider Trader" to "Chillhouse Staker"
-- **NFT Badge**: Mint a soulbound (non-transferable) NFT as proof
-- **Shareable**: Copy results to share on social media
+- **Auto-detect wallet** - Automatically checks connected wallet in Base App
+- **Manual lookup** - Enter any address to check
+- **Wallet order** - See your exact position (e.g. #243,881)
+- **Percentile** - Earlier than X% of Base wallets
+- **Tier system** - Fun meme-based tiers
+- **Shareable** - Copy results to share
 
 ## Tier System
 
 | Wallet Order | Tier |
 |--------------|------|
-| #1 – 1,000 | 👑 Insider Trader |
-| 1,001 – 10,000 | 🏠 Unemployed Base Bro |
-| 10,001 – 100,000 | 👃 Serial Butt Sniffer |
-| 100,001 – 500,000 | 🤔 Thinks He's Early |
-| 500,001 – 1,000,000 | 📦 Part-Time Amazon Delivery Guy |
-| > 1,000,000 | 🧘 Chillhouse Staker |
+| #1 – 1,000 | Insider Trader |
+| 1,001 – 10,000 | Unemployed Base Bro |
+| 10,001 – 100,000 | Serial Butt Sniffer |
+| 100,001 – 500,000 | Thinks He's Early |
+| 500,001 – 1,000,000 | Part-Time Amazon Delivery Guy |
+| > 1,000,000 | Chillhouse Staker |
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
-- **Web3**: wagmi, viem, RainbowKit
-- **Blockchain**: Base (Coinbase L2)
-- **Smart Contract**: Solidity (ERC-721 Soulbound)
+- **Framework**: Next.js 14 + TypeScript
+- **Styling**: Tailwind CSS
+- **Web3**: OnchainKit MiniKit
+- **Blockchain**: Base
 
 ## Getting Started
 
@@ -42,8 +43,9 @@ npm install
 cp .env.example .env.local
 ```
 
-Edit `.env.local` and add:
-- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` - Get from [WalletConnect Cloud](https://cloud.walletconnect.com/)
+Edit `.env.local`:
+- `NEXT_PUBLIC_URL` - Your deployed app URL
+- `NEXT_PUBLIC_ONCHAINKIT_API_KEY` - Get from [Coinbase Developer Portal](https://portal.cdp.coinbase.com/)
 - `NEXT_PUBLIC_BASESCAN_API_KEY` - Get from [BaseScan](https://basescan.org/apis)
 
 ### 3. Run development server
@@ -52,15 +54,19 @@ Edit `.env.local` and add:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+### 4. Deploy to Vercel
 
-## Smart Contract Deployment
+Deploy to Vercel and update `NEXT_PUBLIC_URL` with your production URL.
 
-The NFT contract is in `contracts/BaseEarlyBadge.sol`. To deploy:
+### 5. Sign manifest
 
-1. Install Foundry or Hardhat
-2. Deploy to Base mainnet
-3. Update `BADGE_NFT_ADDRESS` in `src/lib/nft.ts`
+Use OnchainKit CLI to sign your manifest for the Base App.
+
+## Resources
+
+- [Base Mini Apps Docs](https://docs.base.org/wallet-app/mini-apps)
+- [MiniKit Quickstart](https://docs.base.org/builderkits/minikit/quickstart)
+- [OnchainKit](https://github.com/coinbase/onchainkit)
 
 ## License
 

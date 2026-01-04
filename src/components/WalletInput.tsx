@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount } from 'wagmi';
+import { useState, useEffect } from 'react';
+import { useMiniKit } from '@coinbase/onchainkit/minikit';
 import { isAddress, type Address } from 'viem';
 
 interface WalletInputProps {
@@ -11,9 +10,16 @@ interface WalletInputProps {
 }
 
 export function WalletInput({ onCheck, isLoading }: WalletInputProps) {
-  const { address: connectedAddress, isConnected } = useAccount();
+  const { walletAddress } = useMiniKit();
   const [manualAddress, setManualAddress] = useState('');
   const [error, setError] = useState('');
+
+  // Auto-check connected wallet on mount
+  useEffect(() => {
+    if (walletAddress && isAddress(walletAddress)) {
+      onCheck(walletAddress as Address);
+    }
+  }, [walletAddress, onCheck]);
 
   const handleManualCheck = () => {
     if (!manualAddress) {
@@ -31,19 +37,15 @@ export function WalletInput({ onCheck, isLoading }: WalletInputProps) {
   };
 
   const handleConnectedCheck = () => {
-    if (connectedAddress) {
-      onCheck(connectedAddress);
+    if (walletAddress && isAddress(walletAddress)) {
+      onCheck(walletAddress as Address);
     }
   };
 
   return (
     <div className="w-full max-w-lg mx-auto space-y-6">
-      {/* Connect Wallet Section */}
-      <div className="text-center">
-        <ConnectButton />
-      </div>
-
-      {isConnected && connectedAddress && (
+      {/* Connected Wallet Button */}
+      {walletAddress && (
         <button
           onClick={handleConnectedCheck}
           disabled={isLoading}

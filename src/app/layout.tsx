@@ -3,17 +3,17 @@ import { Providers } from '@/components/Providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'How Early on Base? | Check Your Wallet',
-  description: 'Discover how early your wallet was on Base and mint a soulbound NFT badge to prove it.',
+  title: 'How Early on Base?',
+  description: 'Discover how early your wallet was on Base. Check your OG status!',
   openGraph: {
     title: 'How Early on Base?',
-    description: 'Check how early your wallet was on Base and mint your badge!',
+    description: 'Discover how early your wallet was on Base.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'How Early on Base?',
-    description: 'Check how early your wallet was on Base and mint your badge!',
+    description: 'Discover how early your wallet was on Base.',
   },
 };
 
