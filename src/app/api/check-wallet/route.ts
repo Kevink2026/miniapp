@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const CDP_API_URL = 'https://api.developer.coinbase.com/rpc/v1/base';
+const CDP_SQL_API_URL = 'https://api.cdp.coinbase.com/platform/v2/data/query/run';
 const CDP_API_KEY = process.env.NEXT_PUBLIC_ONCHAINKIT_API_KEY || '';
-
-// Fallback to BaseScan if CDP doesn't work
-const BASESCAN_API_KEY = process.env.NEXT_PUBLIC_BASESCAN_API_KEY || '';
-const BASESCAN_API_URL = 'https://api.basescan.org/api';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -15,57 +11,78 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Address required' }, { status: 400 });
   }
 
-  // Try BaseScan first (more reliable for transaction history)
+  const lowerAddress = address.toLowerCase();
+
   try {
-    const txUrl = `${BASESCAN_API_URL}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${BASESCAN_API_KEY}`;
+    // Query for first transaction (sent or received)
+    const sql = `
+      SELECT
+        block_number,
+        block_timestamp,
+        transaction_hash
+      FROM base.transactions
+      WHERE from_address = '${lowerAddress}' OR to_address = '${lowerAddress}'
+      ORDER BY block_number ASC
+      LIMIT 1
+    `;
 
-    console.log('Fetching from BaseScan for address:', address);
+    console.log('CDP SQL Query:', sql);
+    console.log('API Key present:', !!CDP_API_KEY);
 
-    const txResponse = await fetch(txUrl);
-    const txData = await txResponse.json();
+    const response = await fetch(CDP_SQL_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${CDP_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sql }),
+    });
 
-    console.log('BaseScan response status:', txData.status, 'message:', txData.message);
+    const data = await response.json();
+    console.log('CDP Response:', JSON.stringify(data).slice(0, 500));
 
-    if (txData.status === '1' && txData.result && txData.result.length > 0) {
-      const tx = txData.result[0];
-      console.log('Found transaction:', tx.hash);
+    if (data.rows && data.rows.length > 0) {
+      const row = data.rows[0];
+      // CDP returns columns in order: block_number, block_timestamp, transaction_hash
       return NextResponse.json({
         success: true,
-        hash: tx.hash,
-        timestamp: parseInt(tx.timeStamp),
-        blockNumber: parseInt(tx.blockNumber),
+        hash: row[2], // transaction_hash
+        timestamp: Math.floor(new Date(row[1]).getTime() / 1000), // block_timestamp
+        blockNumber: parseInt(row[0]), // block_number
       });
     }
 
-    // Try internal transactions
-    const internalUrl = `${BASESCAN_API_URL}?module=account&action=txlistinternal&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${BASESCAN_API_KEY}`;
-    const internalResponse = await fetch(internalUrl);
-    const internalData = await internalResponse.json();
+    // Try transfers table (ERC-20, ERC-721, etc.)
+    const transfersSql = `
+      SELECT
+        block_number,
+        block_timestamp,
+        transaction_hash
+      FROM base.transfers
+      WHERE from_address = '${lowerAddress}' OR to_address = '${lowerAddress}'
+      ORDER BY block_number ASC
+      LIMIT 1
+    `;
 
-    if (internalData.status === '1' && internalData.result && internalData.result.length > 0) {
-      const tx = internalData.result[0];
+    const transfersResponse = await fetch(CDP_SQL_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${CDP_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sql: transfersSql }),
+    });
+
+    const transfersData = await transfersResponse.json();
+    console.log('CDP Transfers Response:', JSON.stringify(transfersData).slice(0, 500));
+
+    if (transfersData.rows && transfersData.rows.length > 0) {
+      const row = transfersData.rows[0];
       return NextResponse.json({
         success: true,
-        hash: tx.hash,
-        timestamp: parseInt(tx.timeStamp),
-        blockNumber: parseInt(tx.blockNumber),
-      });
-    }
-
-    // Try ERC20 token transfers
-    const tokenUrl = `${BASESCAN_API_URL}?module=account&action=tokentx&address=${address}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc&apikey=${BASESCAN_API_KEY}`;
-    const tokenResponse = await fetch(tokenUrl);
-    const tokenData = await tokenResponse.json();
-
-    console.log('BaseScan token response:', tokenData.status, tokenData.message);
-
-    if (tokenData.status === '1' && tokenData.result && tokenData.result.length > 0) {
-      const tx = tokenData.result[0];
-      return NextResponse.json({
-        success: true,
-        hash: tx.hash,
-        timestamp: parseInt(tx.timeStamp),
-        blockNumber: parseInt(tx.blockNumber),
+        hash: row[2],
+        timestamp: Math.floor(new Date(row[1]).getTime() / 1000),
+        blockNumber: parseInt(row[0]),
       });
     }
 
@@ -74,19 +91,18 @@ export async function GET(request: NextRequest) {
       success: false,
       error: 'No transactions found',
       debug: {
-        address: address,
-        txStatus: txData.status,
-        txMessage: txData.message,
-        txResult: txData.result,
-        apiKeyPresent: !!BASESCAN_API_KEY,
+        address: lowerAddress,
+        cdpResponse: data,
+        transfersResponse: transfersData,
+        apiKeyPresent: !!CDP_API_KEY,
       }
     });
 
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('CDP API Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to fetch transaction data',
+      error: 'Failed to fetch from CDP',
       details: String(error)
     }, { status: 500 });
   }
