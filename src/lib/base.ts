@@ -19,6 +19,9 @@ export async function getFirstTransaction(address: Address): Promise<{
   hash: string;
   blockNumber: number;
   txCount?: number;
+  walletOrder?: number;
+  totalWallets?: number;
+  isExact?: boolean;
 } | null> {
   try {
     // Use our API route to avoid CORS issues
@@ -32,6 +35,9 @@ export async function getFirstTransaction(address: Address): Promise<{
         hash: data.hash,
         blockNumber: data.blockNumber || 0,
         txCount: data.totalTransactions || data.txCount,
+        walletOrder: data.walletOrder,
+        totalWallets: data.totalWallets,
+        isExact: data.isExact,
       };
     }
 
@@ -99,9 +105,22 @@ export async function getWalletStats(address: Address): Promise<WalletStats | nu
     return null;
   }
 
-  // If we have txCount but no blockNumber, we know they have transactions
-  // but we can't determine their exact order
-  const { walletOrder, totalWallets } = await estimateWalletOrder(firstTx.blockNumber);
+  // Use exact data from SQL API if available, otherwise estimate
+  let walletOrder: number;
+  let totalWallets: number;
+
+  if (firstTx.isExact && firstTx.walletOrder && firstTx.totalWallets) {
+    // Use exact data from CDP SQL API
+    walletOrder = firstTx.walletOrder;
+    totalWallets = firstTx.totalWallets;
+    console.log('Using exact wallet order from SQL API');
+  } else {
+    // Fallback to estimation
+    const estimated = await estimateWalletOrder(firstTx.blockNumber);
+    walletOrder = estimated.walletOrder;
+    totalWallets = estimated.totalWallets;
+    console.log('Using estimated wallet order');
+  }
 
   return {
     address,
