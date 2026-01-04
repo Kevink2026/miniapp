@@ -1,24 +1,28 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useAccount, useConnect } from 'wagmi';
 import { type Address } from 'viem';
-import { WalletInput } from '@/components/WalletInput';
 import { ResultsDisplay } from '@/components/ResultsDisplay';
 import { getWalletStats, type WalletStats } from '@/lib/base';
 
-type AppState = 'input' | 'loading' | 'results' | 'error' | 'no-transactions';
+type AppState = 'connecting' | 'loading' | 'results' | 'error' | 'no-transactions';
 
 export default function Home() {
-  const [appState, setAppState] = useState<AppState>('input');
+  const { address, isConnected, isConnecting } = useAccount();
+  const { connect, connectors } = useConnect();
+
+  const [appState, setAppState] = useState<AppState>('connecting');
   const [walletStats, setWalletStats] = useState<WalletStats | null>(null);
   const [error, setError] = useState<string>('');
+  const [hasChecked, setHasChecked] = useState(false);
 
-  const handleCheck = useCallback(async (address: Address) => {
+  const handleCheck = useCallback(async (walletAddress: Address) => {
     setAppState('loading');
     setError('');
 
     try {
-      const stats = await getWalletStats(address);
+      const stats = await getWalletStats(walletAddress);
 
       if (!stats) {
         setAppState('no-transactions');
@@ -34,11 +38,29 @@ export default function Home() {
     }
   }, []);
 
+  // Auto-check when wallet connects
+  useEffect(() => {
+    if (isConnected && address && !hasChecked) {
+      setHasChecked(true);
+      handleCheck(address);
+    }
+  }, [isConnected, address, hasChecked, handleCheck]);
+
   const handleReset = useCallback(() => {
-    setAppState('input');
+    setHasChecked(false);
     setWalletStats(null);
     setError('');
-  }, []);
+    if (address) {
+      handleCheck(address);
+    }
+  }, [address, handleCheck]);
+
+  const handleConnect = () => {
+    const connector = connectors[0];
+    if (connector) {
+      connect({ connector });
+    }
+  };
 
   return (
     <main className="min-h-screen flex flex-col safe-area-inset">
@@ -55,28 +77,48 @@ export default function Home() {
       {/* Main Content */}
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          {appState === 'input' && (
-            <WalletInput onCheck={handleCheck} isLoading={false} />
+
+          {/* Not connected - show connect button */}
+          {!isConnected && !isConnecting && (
+            <div className="text-center space-y-6">
+              <div className="w-20 h-20 mx-auto bg-base-blue/20 rounded-full flex items-center justify-center text-4xl">
+                🔵
+              </div>
+              <div>
+                <p className="text-lg font-medium text-white">Connect your wallet</p>
+                <p className="text-gray-400 text-sm mt-1">
+                  to see how early you are on Base
+                </p>
+              </div>
+              <button
+                onClick={handleConnect}
+                className="w-full py-4 px-6 bg-base-blue hover:bg-blue-600 text-white font-semibold rounded-xl transition-all duration-200 glow"
+              >
+                Connect Wallet
+              </button>
+            </div>
           )}
 
-          {appState === 'loading' && (
+          {/* Connecting */}
+          {isConnecting && (
             <div className="text-center space-y-4">
               <div className="w-16 h-16 mx-auto bg-base-blue rounded-full flex items-center justify-center">
                 <svg className="animate-spin h-8 w-8 text-white" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              </div>
+              <p className="text-lg font-medium text-white">Connecting...</p>
+            </div>
+          )}
+
+          {/* Loading wallet data */}
+          {isConnected && appState === 'loading' && (
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 mx-auto bg-base-blue rounded-full flex items-center justify-center">
+                <svg className="animate-spin h-8 w-8 text-white" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
               </div>
               <div>
@@ -86,14 +128,16 @@ export default function Home() {
             </div>
           )}
 
-          {appState === 'results' && walletStats && (
+          {/* Results */}
+          {isConnected && appState === 'results' && walletStats && (
             <ResultsDisplay
               stats={walletStats}
               onReset={handleReset}
             />
           )}
 
-          {appState === 'no-transactions' && (
+          {/* No transactions */}
+          {isConnected && appState === 'no-transactions' && (
             <div className="text-center space-y-4">
               <div className="w-16 h-16 mx-auto bg-gray-700 rounded-full flex items-center justify-center text-3xl">
                 🤷
@@ -108,12 +152,13 @@ export default function Home() {
                 onClick={handleReset}
                 className="py-3 px-6 bg-base-blue hover:bg-blue-600 text-white font-medium rounded-xl transition-colors"
               >
-                Try Another Wallet
+                Try Again
               </button>
             </div>
           )}
 
-          {appState === 'error' && (
+          {/* Error */}
+          {isConnected && appState === 'error' && (
             <div className="text-center space-y-4">
               <div className="w-16 h-16 mx-auto bg-red-500/20 rounded-full flex items-center justify-center text-3xl">
                 ❌
